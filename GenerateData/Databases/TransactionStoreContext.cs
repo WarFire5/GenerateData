@@ -1,13 +1,18 @@
 ﻿using GenerateData.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Npgsql;
 
 namespace GenerateData;
 
-public class CrmContext : DbContext
+public class TransactionStoreContext : DbContext
 {
-    public virtual DbSet<LeadDto> Leads { get; init; } = default;
-    public virtual DbSet<AccountDto> Accounts { get; init; } = default;
+    public DbSet<TransactionDto> Transactions { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.HasPostgresEnum<TransactionType>();
+    }
     
     protected override void OnConfiguring(DbContextOptionsBuilder options)
     {
@@ -15,13 +20,11 @@ public class CrmContext : DbContext
         options.UseSnakeCaseNamingConvention();
         options.EnableSensitiveDataLogging();
     }
-
+    
     private static NpgsqlDataSource ConfigureDataSource()
     {
-        var dataSourceBuilder = new NpgsqlDataSourceBuilder("server=194.87.210.5;Port=5432;database=crm;username=postgres;password=qwe!23");
-        dataSourceBuilder.MapEnum<AccountStatus>();
-        dataSourceBuilder.MapEnum<Currency>();
-        dataSourceBuilder.MapEnum<LeadStatus>();
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(Options.TsConnectionString);
+        dataSourceBuilder.MapEnum<TransactionType>();
         var dataSource = dataSourceBuilder.Build();
 
         return dataSource;
