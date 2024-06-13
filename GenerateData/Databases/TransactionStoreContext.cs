@@ -1,6 +1,5 @@
 ﻿using GenerateData.Enums;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Npgsql;
 
 namespace GenerateData;
