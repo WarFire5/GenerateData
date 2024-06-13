@@ -13,20 +13,21 @@ public static class Program
         await using var tSContext = new TransactionStoreContext();
 
         int count = 0;
+        Random random = new Random(); // Чтобы избежать создания одинаковых значений
+
         foreach (var account in accounts)
         {
             // Добавление депозитных транзакций
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < 2; i++)
             {
                 DateTime startDateTime = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
                 DateTime endDateTime = DateTime.UtcNow;
                 DateTime date = GetRandomDateTime(startDateTime, endDateTime);
 
-                Random random = new Random();
                 TransactionDto deposit = new TransactionDto()
                 {
                     AccountId = account.Id,
-                    Amount = random.Next(1, 1000000),
+                    Amount = GetRandomWholeAmount(random),
                     TransactionType = TransactionType.Deposit,
                     Date = date
                 };
@@ -34,17 +35,16 @@ public static class Program
             }
 
             // Добавление withdrawal транзакций
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 1; i++)
             {
                 DateTime startDateTime = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
                 DateTime endDateTime = DateTime.UtcNow;
                 DateTime date = GetRandomDateTime(startDateTime, endDateTime);
 
-                Random random = new Random();
                 TransactionDto withdraw = new TransactionDto()
                 {
                     AccountId = account.Id,
-                    Amount = random.Next(1, 1000000) * -1,
+                    Amount = GetRandomWholeAmount(random) * -1,
                     TransactionType = TransactionType.Withdraw,
                     Date = date
                 };
@@ -52,17 +52,16 @@ public static class Program
             }
 
             // Добавление transfer транзакций
-            for (int i = 0; i < 28; i++)
+            for (int i = 0; i < 4; i++)
             {
                 DateTime startDateTime = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
                 DateTime endDateTime = DateTime.UtcNow;
                 DateTime date = GetRandomDateTime(startDateTime, endDateTime);
 
-                Random random = new Random();
                 TransactionDto transferWithdraw = new TransactionDto()
                 {
                     AccountId = account.Id,
-                    Amount = random.Next(1, 1000000) * -1,
+                    Amount = GetRandomWholeAmount(random) * -1,
                     TransactionType = TransactionType.Transfer,
                     Date = date
                 };
@@ -70,7 +69,7 @@ public static class Program
                 TransactionDto transferDeposit = new TransactionDto()
                 {
                     AccountId = account.Id,
-                    Amount = random.Next(1, 1000000),
+                    Amount = GetRandomNonZeroFractionalAmount(random),
                     TransactionType = TransactionType.Transfer,
                     Date = date
                 };
@@ -81,7 +80,7 @@ public static class Program
 
             count++;
 
-            if (count >= 100) break;
+            if (count >= 3818182) break;
         }
 
         await tSContext.SaveChangesAsync();
@@ -92,15 +91,29 @@ public static class Program
     {
         Random random = new Random();
         int range = (endDate - startDate).Days;
-        DateTime randomDate = startDate.AddDays(random.Next(range));
+        int randomDays = random.Next(range);
+        int randomMilliseconds = random.Next(0, 86400000); // 86400000 миллисекунд = 24 часа
 
-        // Генерация случайного времени
-        randomDate = randomDate.Date // Убираем часть с временем
-            .AddHours(random.Next(0, 24)) // Генерируем часы от 0 до 23
-            .AddMinutes(random.Next(0, 60)) // Генерируем минуты от 0 до 59
-            .AddSeconds(random.Next(0, 60)) // Генерируем секунды от 0 до 59
-            .AddMilliseconds(random.Next(0, 1000)); // Генерируем миллисекунды от 0 до 999
+        DateTime randomDate = startDate.AddDays(randomDays).AddMilliseconds(randomMilliseconds);
 
         return randomDate;
+    }
+
+    public static decimal GetRandomWholeAmount(Random random)
+    {
+        return random.Next(1, 1000000);
+    }
+
+    public static decimal GetRandomNonZeroFractionalAmount(Random random)
+    {
+        int integerPart = random.Next(1, 1000000);
+        double fractionalPart;
+        do
+        {
+            fractionalPart = random.NextDouble(); // Случайное число от 0.0 до 1.0
+        } while (Math.Abs(fractionalPart) < 1e-6); // Повторяем, пока дробная часть не станет ненулевой
+
+        decimal amount = (decimal)(integerPart + fractionalPart);
+        return Math.Round(amount, 4); // Округление до 4 знаков после запятой
     }
 }
