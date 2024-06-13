@@ -369,3 +369,5 @@ TransactionStore.API/Properties/launchSettings.json
 /TransactionStore.API/appsettings.Development.json
 
 .idea/.idea.GenerateData/.idea/
+
+GenerateData/Options.cs
