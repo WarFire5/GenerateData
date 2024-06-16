@@ -14,9 +14,9 @@ public static class Program
 
         int totalTransactions = 30002358;
 
-        int totalTransferTransactions = (int)Math.Ceiling(totalTransactions * 0.7); // 70% на Трансферы
+        int totalTransferTransactions = (int)Math.Ceiling(totalTransactions * 0.7); // 70% на Трансфер
         int totalWithdrawTransactions = (int)Math.Floor(totalTransactions * 0.10); // 10% на Вывод
-        int totalDepositTransactions = totalTransactions - totalTransferTransactions - totalWithdrawTransactions; // Оставшиеся на Ввод
+        int totalDepositTransactions = totalTransactions - totalTransferTransactions - totalWithdrawTransactions; // Оставшиеся 20% на Ввод
 
         if (totalTransferTransactions % 2 != 0)
         {
@@ -35,10 +35,10 @@ public static class Program
 
     public static async Task AddTransactions(TransactionStoreContext context, List<Guid> accountIds, int withdrawCount, int depositCount, int transferCount, Random random)
     {
-        // Распределение транзакций по типам (Вывод, Ввод, Трансфер)
-        await AddRandomTransactionsWithRetry(context, accountIds, withdrawCount, TransactionType.Withdraw, random);
+        // Распределение транзакций по типам (Ввод, Вывод, Трансфер)
         await AddRandomTransactionsWithRetry(context, accountIds, depositCount, TransactionType.Deposit, random);
-        await AddRandomTransferTransactionsWithRetry(context, accountIds, transferCount / 2, random); // Разделим на 2, т.к. каждая трансферная транзакция состоит из двух операций
+        await AddRandomTransactionsWithRetry(context, accountIds, withdrawCount, TransactionType.Withdraw, random);
+        await AddRandomTransferTransactionsWithRetry(context, accountIds, transferCount / 2, random); // Делим на 2, т.к. каждая трансферная транзакция состоит из двух частей
     }
 
     public static async Task AddRandomTransactionsWithRetry(TransactionStoreContext context, List<Guid> accountIds, int batchSize, TransactionType type, Random random)
@@ -83,7 +83,7 @@ public static class Program
         DateTime startDateTime = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         DateTime endDateTime = DateTime.UtcNow;
 
-        int totalTransactionsToAdd = batchSize * 2; // Умножаем на 2, т.к. каждая трансферная транзакция состоит из двух операций
+        int totalTransactionsToAdd = batchSize * 2; // Умножаем на 2, т.к. каждая трансферная транзакция состоит из двух частей
         int index = 0;
 
         while (totalTransactionsToAdd > 0)
@@ -150,8 +150,7 @@ public static class Program
                     throw;
                 }
 
-                // Логирование дополнительных данных о проблеме, если необходимо
-                Console.WriteLine("Дополнительная информация для отладки:");
+                Console.WriteLine("Дополнительная информация для отладки:"); // Логирование дополнительных данных о проблеме, если необходимо
                 Console.WriteLine(ex.StackTrace);
             }
         }
