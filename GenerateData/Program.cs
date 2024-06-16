@@ -10,13 +10,13 @@ public static class Program
     {
         await using var crmContext = new CrmContext();
         var accounts = await crmContext.Accounts.Select(t => t.Id).ToListAsync();
-        Console.WriteLine("Подключение к CRM контексту и получение первых 3000236 аккаунтов.");
+        Console.WriteLine("Подключение к CRM контексту и получение аккаунтов.");
 
         int totalTransactions = 30002358;
 
-        int totalTransferTransactions = (int)Math.Ceiling(totalTransactions * 0.7); // 70% на Трансфер
-        int totalWithdrawTransactions = (int)Math.Floor(totalTransactions * 0.10); // 10% на Вывод
-        int totalDepositTransactions = totalTransactions - totalTransferTransactions - totalWithdrawTransactions; // Оставшиеся 20% на Ввод
+        int totalDepositTransactions = (int)Math.Ceiling(totalTransactions * 0.2); // 20% на Ввод
+        int totalWithdrawTransactions = (int)Math.Floor(totalTransactions * 0.1); // 10% на Вывод
+        int totalTransferTransactions = totalTransactions - totalDepositTransactions - totalWithdrawTransactions; // Оставшиеся 70% на Трансфер
 
         if (totalTransferTransactions % 2 != 0)
         {
@@ -29,7 +29,6 @@ public static class Program
         Console.WriteLine("Подключение к TransactionStore контексту для добавления транзакций.");
 
         await AddTransactions(tSContext, accounts, totalWithdrawTransactions, totalDepositTransactions, totalTransferTransactions, random);
-
         Console.WriteLine("Транзакции успешно добавлены.");
     }
 
@@ -90,18 +89,27 @@ public static class Program
         {
             List<TransactionDto> transactions = [];
 
-            for (int i = 0; i < batchSize && index < accountIds.Count; i++)
+            for (int i = 0; i < batchSize && index < accountIds.Count - 1; i++) // Учитываем -1, чтобы иметь достаточно аккаунтов для парных операций
             {
                 DateTime date = GetRandomDateTime(startDateTime, endDateTime);
-                Guid accountId = accountIds[index];
+                Guid withdrawAccountId = accountIds[index];
+                Guid depositAccountId;
 
-                decimal amount = GetRandomNonZeroFractionalAmount(random);
+                // Получаем другой случайный аккаунт для депозита, отличный от аккаунта для вывода
+                do
+                {
+                    depositAccountId = accountIds[random.Next(accountIds.Count)];
+                }
+                while (depositAccountId == withdrawAccountId);
+
+                decimal withdrawAmount = GetRandomNonZeroFractionalAmount(random) * -1; // Отрицательное значение для вывода
+                decimal depositAmount = GetRandomNonZeroFractionalAmount(random); // Положительное значение для депозита
 
                 TransactionDto transferWithdraw = new TransactionDto()
                 {
                     Id = Guid.NewGuid(), // Генерация уникального идентификатора
-                    AccountId = accountId,
-                    Amount = -amount,
+                    AccountId = withdrawAccountId,
+                    Amount = withdrawAmount,
                     TransactionType = TransactionType.Transfer,
                     Date = date
                 };
@@ -109,8 +117,8 @@ public static class Program
                 TransactionDto transferDeposit = new TransactionDto()
                 {
                     Id = Guid.NewGuid(), // Генерация уникального идентификатора
-                    AccountId = accountId,
-                    Amount = amount,
+                    AccountId = depositAccountId,
+                    Amount = depositAmount,
                     TransactionType = TransactionType.Transfer,
                     Date = date
                 };
@@ -152,6 +160,7 @@ public static class Program
 
                 Console.WriteLine("Дополнительная информация для отладки:"); // Логирование дополнительных данных о проблеме, если необходимо
                 Console.WriteLine(ex.StackTrace);
+                await Task.Delay(TimeSpan.FromHours(1));
             }
         }
     }
