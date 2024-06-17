@@ -1,5 +1,4 @@
-﻿using EFCore.BulkExtensions;
-using GenerateData.Enums;
+﻿using GenerateData.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace GenerateData;
@@ -34,9 +33,11 @@ public static class Program
 
     public static async Task AddTransactions(TransactionStoreContext context, List<Guid> accountIds, int withdrawCount, int depositCount, int transferCount, Random random)
     {
-        // Распределение транзакций по типам (Ввод, Вывод, Трансфер)
+        Console.WriteLine("Генерируем deposit");
         await AddRandomTransactionsWithRetry(context, accountIds, depositCount, TransactionType.Deposit, random);
+        Console.WriteLine("Генерируем withdraw");
         await AddRandomTransactionsWithRetry(context, accountIds, withdrawCount, TransactionType.Withdraw, random);
+        Console.WriteLine("Генерируем transfer");
         await AddRandomTransferTransactionsWithRetry(context, accountIds, transferCount / 2, random); // Делим на 2, т.к. каждая трансферная транзакция состоит из двух частей
     }
 
@@ -50,16 +51,16 @@ public static class Program
 
         while (totalTransactionsToAdd > 0)
         {
-            List<TransactionDto> transactions = [];
+            List<TransactionDto> transactions = new List<TransactionDto>();
+            int currentBatchSize = Math.Min(300000, totalTransactionsToAdd); // Устанавливаем размер текущего пакета
 
-            for (int i = 0; i < batchSize && index < accountIds.Count; i++)
+            for (int i = 0; i < currentBatchSize && index < accountIds.Count; i++)
             {
                 DateTime date = GetRandomDateTime(startDateTime, endDateTime);
                 Guid accountId = accountIds[index];
 
                 TransactionDto transaction = new TransactionDto()
                 {
-                    Id = Guid.NewGuid(), // Генерация уникального идентификатора
                     AccountId = accountId,
                     Amount = type == TransactionType.Withdraw
                         ? -GetRandomNonZeroFractionalAmount(random)
@@ -72,8 +73,8 @@ public static class Program
                 index++;
             }
 
-            await BulkInsertWithRetry(context, transactions);
-            totalTransactionsToAdd -= batchSize;
+            await InsertTransactionsWithRetry(context, transactions);
+            totalTransactionsToAdd -= currentBatchSize;
         }
     }
 
@@ -87,9 +88,10 @@ public static class Program
 
         while (totalTransactionsToAdd > 0)
         {
-            List<TransactionDto> transactions = [];
+            List<TransactionDto> transactions = new List<TransactionDto>();
+            int currentBatchSize = Math.Min(300000, totalTransactionsToAdd); // Устанавливаем размер текущего пакета
 
-            for (int i = 0; i < batchSize && index < accountIds.Count - 1; i++) // Учитываем -1, чтобы иметь достаточно аккаунтов для парных операций
+            for (int i = 0; i < currentBatchSize && index < accountIds.Count - 1; i++) // Учитываем -1, чтобы иметь достаточно аккаунтов для парных операций
             {
                 DateTime date = GetRandomDateTime(startDateTime, endDateTime);
                 Guid withdrawAccountId = accountIds[index];
@@ -107,7 +109,6 @@ public static class Program
 
                 TransactionDto transferWithdraw = new TransactionDto()
                 {
-                    Id = Guid.NewGuid(), // Генерация уникального идентификатора
                     AccountId = withdrawAccountId,
                     Amount = withdrawAmount,
                     TransactionType = TransactionType.Transfer,
@@ -116,7 +117,6 @@ public static class Program
 
                 TransactionDto transferDeposit = new TransactionDto()
                 {
-                    Id = Guid.NewGuid(), // Генерация уникального идентификатора
                     AccountId = depositAccountId,
                     Amount = depositAmount,
                     TransactionType = TransactionType.Transfer,
@@ -128,39 +128,44 @@ public static class Program
                 index++;
             }
 
-            await BulkInsertWithRetry(context, transactions);
-            totalTransactionsToAdd -= batchSize * 2;
+            await InsertTransactionsWithRetry(context, transactions);
+            totalTransactionsToAdd -= currentBatchSize;
         }
     }
 
-    public static async Task BulkInsertWithRetry(TransactionStoreContext context, List<TransactionDto> transactions)
+    public static async Task InsertTransactionsWithRetry(TransactionStoreContext context, List<TransactionDto> transactions)
     {
+        const int batchSize = 300000;
         const int maxRetries = 10;
         int retryCount = 0;
         bool success = false;
 
         while (!success && retryCount < maxRetries)
         {
-            try
+            for (int i = 0; i < transactions.Count; i += batchSize)
             {
-                await context.BulkInsertAsync(transactions);
-                context.ChangeTracker.Clear(); // Очищение контекста между вставками
-                success = true;
-            }
-            catch (Exception ex)
-            {
-                retryCount++;
-                Console.WriteLine($"Ошибка при пакетной вставке, повтор {retryCount}/{maxRetries}. Ошибка: {ex.Message}");
-
-                if (retryCount >= maxRetries)
+                var batch = transactions.Skip(i).Take(batchSize).ToList();
+                try
                 {
-                    Console.WriteLine("Достигнуто максимальное количество повторов. Вставка не удалась.");
-                    throw;
+                    await context.Transactions.AddRangeAsync(batch);
+                    await context.SaveChangesAsync();
+                    context.ChangeTracker.Clear(); // Очищение контекста между вставками
+                    success = true;
                 }
+                catch (Exception ex)
+                {
+                    retryCount++;
+                    Console.WriteLine($"Ошибка при вставке транзакций, попытка {retryCount}/{maxRetries}. Ошибка: {ex.Message}");
+                    Console.WriteLine(ex.StackTrace);
 
-                Console.WriteLine("Дополнительная информация для отладки:"); // Логирование дополнительных данных о проблеме, если необходимо
-                Console.WriteLine(ex.StackTrace);
-                await Task.Delay(TimeSpan.FromHours(1));
+                    if (retryCount >= maxRetries)
+                    {
+                        Console.WriteLine("Достигнуто максимальное количество повторов. Вставка не удалась.");
+                        throw;
+                    }
+
+                    await Task.Delay(TimeSpan.FromMinutes(1)); // Ожидание перед повторной попыткой
+                }
             }
         }
     }
